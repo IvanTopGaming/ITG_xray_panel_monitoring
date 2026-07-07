@@ -1,0 +1,8 @@
+central/.env
+node-agent/.env
+*.env
+!*.env.example
+grafana-data/
+prometheus-data/
+**/data/
+*.log
