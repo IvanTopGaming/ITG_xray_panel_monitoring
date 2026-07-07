@@ -1,0 +1,24 @@
+{
+  "uid": "xray-traffic",
+  "title": "Xray Traffic",
+  "tags": ["itg", "xray"],
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [
+    { "name": "node", "type": "query", "datasource": {"type":"prometheus","uid":"prometheus"},
+      "query": "label_values(up{job=\"xray\"}, node)", "includeAll": true, "multi": true, "current": {} }
+  ]},
+  "panels": [
+    { "id": 1, "type": "timeseries", "title": "Uplink rate (bit/s)", "gridPos": {"h":8,"w":12,"x":0,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bps"}, "overrides": []},
+      "targets": [{"expr":"sum by (node) (rate(xray_uplink_bytes_total{node=~\"$node\"}[5m]) * 8)","refId":"A","legendFormat":"{{node}}"}] },
+    { "id": 2, "type": "timeseries", "title": "Downlink rate (bit/s)", "gridPos": {"h":8,"w":12,"x":12,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bps"}, "overrides": []},
+      "targets": [{"expr":"sum by (node) (rate(xray_downlink_bytes_total{node=~\"$node\"}[5m]) * 8)","refId":"A","legendFormat":"{{node}}"}] },
+    { "id": 3, "type": "table", "title": "Top traffic by source", "gridPos": {"h":10,"w":24,"x":0,"y":8},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"topk(20, sum by (source) (rate(xray_downlink_bytes_total{node=~\"$node\"}[5m]) * 8))","refId":"A","format":"table","instant":true}] }
+  ]
+}
