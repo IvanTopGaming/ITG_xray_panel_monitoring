@@ -1,0 +1,24 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: telegram
+  group_by: ["node", "alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+
+receivers:
+  - name: telegram
+    telegram_configs:
+      - bot_token: ${TELEGRAM_BOT_TOKEN}
+        chat_id: ${TELEGRAM_CHAT_ID}
+        parse_mode: HTML
+        send_resolved: true
+        message: |
+          <b>{{ .Status | toUpper }}</b> {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }}
+          {{ range .Alerts }}<b>{{ .Labels.alertname }}</b> — {{ .Labels.severity }}
+          node: {{ .Labels.node }}
+          {{ .Annotations.summary }}
+          {{ .Annotations.description }}
+          {{ end }}

@@ -1,0 +1,27 @@
+{
+  "uid": "node-detail",
+  "title": "Node Detail",
+  "tags": ["itg", "nodes"],
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [
+    { "name": "node", "type": "query", "datasource": {"type":"prometheus","uid":"prometheus"},
+      "query": "label_values(up{job=\"node\"}, node)", "includeAll": false, "multi": false, "current": {} }
+  ]},
+  "panels": [
+    { "id": 1, "type": "timeseries", "title": "Load average", "gridPos": {"h":8,"w":12,"x":0,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"node_load1{node=~\"$node\"}","refId":"A","legendFormat":"load1"},{"expr":"node_load5{node=~\"$node\"}","refId":"B","legendFormat":"load5"}] },
+    { "id": 2, "type": "timeseries", "title": "Disk used %", "gridPos": {"h":8,"w":12,"x":12,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
+      "targets": [{"expr":"(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\",node=~\"$node\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\",node=~\"$node\"})) * 100","refId":"A","legendFormat":"{{mountpoint}}"}] },
+    { "id": 3, "type": "timeseries", "title": "Container CPU", "gridPos": {"h":8,"w":12,"x":0,"y":8},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\",node=~\"$node\"}[5m]))","refId":"A","legendFormat":"{{name}}"}] },
+    { "id": 4, "type": "timeseries", "title": "Container memory", "gridPos": {"h":8,"w":12,"x":12,"y":8},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "targets": [{"expr":"sum by (name) (container_memory_usage_bytes{name!=\"\",node=~\"$node\"})","refId":"A","legendFormat":"{{name}}"}] }
+  ]
+}

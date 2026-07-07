@@ -1,0 +1,30 @@
+{
+  "uid": "nodes-overview",
+  "title": "Nodes Overview",
+  "tags": ["itg", "nodes"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [
+    { "name": "node", "type": "query", "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "query": "label_values(up{job=\"node\"}, node)", "includeAll": true, "multi": true, "current": {} }
+  ]},
+  "panels": [
+    { "id": 1, "type": "stat", "title": "Nodes Up", "gridPos": {"h":4,"w":6,"x":0,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"count(up{job=\"node\"} == 1)","refId":"A"}] },
+    { "id": 2, "type": "stat", "title": "Nodes Down", "gridPos": {"h":4,"w":6,"x":6,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"count(up{job=\"node\"} == 0) or vector(0)","refId":"A"}] },
+    { "id": 3, "type": "timeseries", "title": "CPU % by node", "gridPos": {"h":8,"w":12,"x":0,"y":4},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"(1 - avg by (node) (rate(node_cpu_seconds_total{mode=\"idle\",node=~\"$node\"}[5m]))) * 100","refId":"A","legendFormat":"{{node}}"}] },
+    { "id": 4, "type": "timeseries", "title": "RAM % by node", "gridPos": {"h":8,"w":12,"x":12,"y":4},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"(1 - (node_memory_MemAvailable_bytes{node=~\"$node\"} / node_memory_MemTotal_bytes{node=~\"$node\"})) * 100","refId":"A","legendFormat":"{{node}}"}] },
+    { "id": 5, "type": "timeseries", "title": "Network in (bit/s)", "gridPos": {"h":8,"w":24,"x":0,"y":12},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bps"}, "overrides": []},
+      "targets": [{"expr":"sum by (node) (rate(node_network_receive_bytes_total{device!~\"lo|docker.*|veth.*|br-.*\",node=~\"$node\"}[5m]) * 8)","refId":"A","legendFormat":"{{node}}"}] }
+  ]
+}

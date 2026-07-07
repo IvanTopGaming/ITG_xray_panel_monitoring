@@ -1,0 +1,90 @@
+groups:
+  - name: availability
+    rules:
+      - alert: NodeDown
+        expr: up{job="node"} == 0
+        for: 3m
+        labels: { severity: critical }
+        annotations:
+          summary: "Нода {{ $labels.node }} не скрейпится"
+          description: "Prometheus не может собрать метрики agent'а > 3 мин."
+
+      - alert: PanelDown
+        expr: probe_success{job="blackbox-http"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Панель {{ $labels.node }} недоступна"
+          description: "Blackbox HTTP-проба панели не проходит > 2 мин."
+
+      - alert: PanelCertExpiring
+        expr: (probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time()) / 86400 < 14
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "TLS-сертификат панели {{ $labels.node }} истекает"
+          description: "Осталось {{ printf \"%.0f\" $value }} дн. (< 14)."
+
+      - alert: XrayCoreDown
+        expr: up{job="xray"} == 0 or probe_success{job="blackbox-tcp"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Xray-ядро на {{ $labels.node }} не отвечает"
+          description: "xray-exporter не отдаёт stats ИЛИ TCP на inbound-порт лёг."
+
+  - name: containers
+    rules:
+      - alert: ContainerRestarting
+        expr: changes(container_start_time_seconds{name=~"panel.*|.*xray.*|.*caddy.*|.*redis.*|.*bot.*", name!~"mon-.*"}[10m]) > 0
+        for: 0m
+        labels: { severity: warning }
+        annotations:
+          summary: "Контейнер {{ $labels.name }} на {{ $labels.node }} рестартнул"
+          description: "container_start_time вырос за последние 10 мин."
+
+  - name: resources
+    rules:
+      - alert: DiskAlmostFull
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})) * 100 > 85
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Диск на {{ $labels.node }} заполнен > 85%"
+          description: "{{ $labels.mountpoint }}: {{ printf \"%.1f\" $value }}%."
+
+      - alert: HighMemory
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Память на {{ $labels.node }} > 90%"
+          description: "Использование RAM устойчиво высокое."
+
+      - alert: HighCPU
+        expr: (1 - avg by (node) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 90
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "CPU на {{ $labels.node }} > 90%"
+          description: "Загрузка CPU устойчиво высокая > 15 мин."
+
+  - name: traffic
+    rules:
+      - alert: TrafficSpike
+        expr: sum by (node) (rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[5m]) * 8) > 5e9
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Аномальный всплеск трафика на {{ $labels.node }}"
+          description: "Входящий трафик > 5 Гбит/с ({{ $value | humanize }} бит/сек). DDoS/абьюз?"
+
+      - alert: TrafficDropAnomaly
+        expr: |
+          sum by (node) (rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[5m]))
+          < 0.05 * sum by (node) (rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[1h] offset 1h))
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Трафик на {{ $labels.node }} аномально просел"
+          description: "Текущий трафик < 5% от среднего за прошлый час. Проблема с ядром?"

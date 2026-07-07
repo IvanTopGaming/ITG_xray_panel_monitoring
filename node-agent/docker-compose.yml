@@ -1,0 +1,70 @@
+name: itg-mon-agent
+
+networks:
+  agent-net:
+    driver: bridge
+  panel-net:
+    external: true
+    name: ${PANEL_NETWORK}
+
+services:
+  # node-exporter listens on :9100 with network_mode: host, binding on all host interfaces.
+  # Access must be restricted by host firewall to central Prometheus IP only.
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.8.2
+    container_name: mon-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.systemd
+      - --collector.processes
+    pid: host
+    network_mode: host
+    volumes:
+      - /:/host:ro,rslave
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: mon-cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - agent-net
+
+  xray-exporter:
+    image: ghcr.io/compassvpn/xray-exporter:latest
+    container_name: mon-xray-exporter
+    restart: unless-stopped
+    command:
+      - --xray-endpoint=${XRAY_API_ENDPOINT}
+      - --listen=:9550
+      - --metrics-path=/metrics
+    networks:
+      - agent-net
+      - panel-net
+
+  caddy-metrics:
+    image: caddy:2-alpine
+    container_name: mon-caddy-metrics
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${METRICS_PORT}:${METRICS_PORT}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    networks:
+      - agent-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  caddy-data:

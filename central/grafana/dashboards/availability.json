@@ -1,0 +1,18 @@
+{
+  "uid": "availability",
+  "title": "Availability",
+  "tags": ["itg", "availability"],
+  "schemaVersion": 39,
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    { "id": 1, "type": "state-timeline", "title": "Panel HTTP up", "gridPos": {"h":8,"w":24,"x":0,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"probe_success{job=\"blackbox-http\"}","refId":"A","legendFormat":"{{node}}"}] },
+    { "id": 2, "type": "state-timeline", "title": "Xray inbound TCP up", "gridPos": {"h":8,"w":24,"x":0,"y":8},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"probe_success{job=\"blackbox-tcp\"}","refId":"A","legendFormat":"{{node}}"}] },
+    { "id": 3, "type": "table", "title": "TLS cert days left", "gridPos": {"h":8,"w":24,"x":0,"y":16},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"(probe_ssl_earliest_cert_expiry{job=\"blackbox-http\"} - time()) / 86400","refId":"A","format":"table","instant":true,"legendFormat":"{{node}}"}] }
+  ]
+}

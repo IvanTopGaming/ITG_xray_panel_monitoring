@@ -1,0 +1,5 @@
+# Пример формата (закомментировано — свежий central без нод не должен слать false PanelDown):
+# - targets:
+#     - "https://node1.example.com"
+#   labels:
+#     node: "node1"
