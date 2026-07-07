@@ -3,7 +3,7 @@ modules:
     prober: http
     timeout: 10s
     http:
-      valid_status_codes: [200, 204, 301, 302, 401, 403]
+      valid_status_codes: [200, 204, 301, 302, 401, 403, 404]
       method: GET
       fail_if_not_ssl: true
       tls_config:
