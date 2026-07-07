@@ -22,8 +22,8 @@ Central Prometheus+Grafana+Alertmanager тянет метрики с N нод п
 
 ## Установка ноды
 1. Скопировать репо на ноду.
-2. Хеш пароля: `./scripts/gen-htpasswd.sh metrics <password>` → в `node-agent/.env`.
-3. Заполнить `node-agent/.env`: `XRAY_API_ENDPOINT`, `PANEL_NETWORK` (см. `docker network ls`).
+2. Хеш пароля: `./scripts/gen-htpasswd.sh metrics <password>` → `METRICS_PASSWORD_HASH` в `node-agent/caddy-auth.env`.
+3. Заполнить `node-agent/.env`: `METRICS_USER`, `METRICS_PORT`, `XRAY_API_ENDPOINT`, `PANEL_NETWORK` (см. `docker network ls`).
 4. `./scripts/install-node.sh`
 
 ## Добавить ноду в мониторинг

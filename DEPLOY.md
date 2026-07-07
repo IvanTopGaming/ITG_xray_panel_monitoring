@@ -55,19 +55,28 @@ docker network ls | grep metrics-xray
 ./scripts/gen-htpasswd.sh metrics '<пароль>'
 ```
 
-**Шаг 3.** Заполнить `node-agent/.env`:
+**Шаг 3.** Заполнить два файла (хеш вынесен отдельно, чтобы `$` в нём не ломал
+интерполяцию docker compose):
 
 ```bash
 cp node-agent/.env.example node-agent/.env
+cp node-agent/caddy-auth.env.example node-agent/caddy-auth.env
 ```
+
+`node-agent/.env`:
 
 | Переменная | Что вписать |
 |---|---|
 | `METRICS_PORT` | порт метрик наружу (дефолт `8443`) |
 | `METRICS_USER` | тот же логин, что на central |
-| `METRICS_PASSWORD_HASH` | bcrypt-хеш из шага 2 |
 | `XRAY_API_ENDPOINT` | `xray:10085` (подтверждено, менять не надо) |
 | `PANEL_NETWORK` | имя сети из шага 1 |
+
+`node-agent/caddy-auth.env`:
+
+| Переменная | Что вписать |
+|---|---|
+| `METRICS_PASSWORD_HASH` | bcrypt-хеш из шага 2 |
 
 **Шаг 4.** Запуск:
 
