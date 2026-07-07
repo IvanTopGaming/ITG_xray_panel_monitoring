@@ -97,6 +97,8 @@ CENTRAL (Prometheus + Grafana + Alertmanager + Blackbox)
 - **DiskAlmostFull** — диск > 85%.
 - **HighMemory / HighCPU** — устойчивая высокая нагрузка.
 - **TrafficDropAnomaly** — трафик аномально просел (индикатор проблемы с ядром).
+- **TrafficSpike** — трафик аномально вырос выше порога (дефолт ~5 Гбит/с на
+  интерфейс, конфигурируемый). Индикатор DDoS/абьюза/утечки лимитов.
 
 Маршрут: все алерты → Telegram receiver (`telegram_configs` с bot token + chat id
 из `.env`). Группировка по ноде, разумные `repeat_interval`.
