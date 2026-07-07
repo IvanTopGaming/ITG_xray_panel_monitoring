@@ -17,5 +17,5 @@ append "$DIR/blackbox-http.yml" "https://$HOST" ""
 append "$DIR/blackbox-tcp.yml"  "$HOST:$XPORT" $'\n    check: "xray-inbound"'
 
 echo ">> Нода $NAME добавлена. Перезагружаю Prometheus..."
-curl -fsS -X POST http://localhost:9090/-/reload && echo " reloaded" || \
+curl -fsS --connect-timeout 5 --max-time 10 -X POST http://localhost:9090/-/reload && echo " reloaded" || \
   echo ">> reload не прошёл (Prometheus не запущен?). file_sd подхватится сам в течение ~1 мин."
