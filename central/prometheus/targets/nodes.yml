@@ -1,0 +1,7 @@
+- targets:
+    - "node1.example.com:8443"
+  labels:
+    node: "node1"
+# Добавлять ноды сюда (или через scripts/add-node.sh):
+# - targets: ["node2.example.com:8443"]
+#   labels: { node: "node2" }

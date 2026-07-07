@@ -1,0 +1,49 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: node
+    scheme: https
+    metrics_path: /node/metrics
+    basic_auth:
+      username: ${METRICS_USER}
+      password: ${METRICS_PASSWORD}
+    tls_config:
+      insecure_skip_verify: true
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/nodes.yml"]
+
+  - job_name: cadvisor
+    scheme: https
+    metrics_path: /cadvisor/metrics
+    basic_auth:
+      username: ${METRICS_USER}
+      password: ${METRICS_PASSWORD}
+    tls_config:
+      insecure_skip_verify: true
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/nodes.yml"]
+
+  - job_name: xray
+    scheme: https
+    metrics_path: /xray/metrics
+    basic_auth:
+      username: ${METRICS_USER}
+      password: ${METRICS_PASSWORD}
+    tls_config:
+      insecure_skip_verify: true
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/nodes.yml"]
