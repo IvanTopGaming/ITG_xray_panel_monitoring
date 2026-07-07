@@ -45,6 +45,17 @@ services:
     networks:
       - mon-net
 
+  blackbox:
+    image: prom/blackbox-exporter:v0.26.0
+    container_name: mon-blackbox
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks:
+      - mon-net
+
 volumes:
   prom-config:
   prometheus-data:

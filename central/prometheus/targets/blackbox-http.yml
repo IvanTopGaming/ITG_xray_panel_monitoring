@@ -1,0 +1,4 @@
+- targets:
+    - "https://node1.example.com"
+  labels:
+    node: "node1"
