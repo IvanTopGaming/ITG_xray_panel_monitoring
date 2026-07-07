@@ -16,8 +16,11 @@ services:
         apk add --no-cache gettext >/dev/null
         envsubst '$$METRICS_USER $$METRICS_PASSWORD' \
           < /in/prometheus.yml > /out/prometheus.yml
+        envsubst '$$TELEGRAM_BOT_TOKEN $$TELEGRAM_CHAT_ID' \
+          < /in/alertmanager.yml > /out/alertmanager.yml
     volumes:
       - ./prometheus/prometheus.yml:/in/prometheus.yml:ro
+      - ./alertmanager/alertmanager.yml:/in/alertmanager.yml:ro
       - prom-config:/out
     networks:
       - mon-net
@@ -53,6 +56,22 @@ services:
       - --config.file=/etc/blackbox/blackbox.yml
     volumes:
       - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks:
+      - mon-net
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.0
+    container_name: mon-alertmanager
+    restart: unless-stopped
+    depends_on:
+      prom-render:
+        condition: service_completed_successfully
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+    volumes:
+      - prom-config:/etc/alertmanager
+    ports:
+      - "9093:9093"
     networks:
       - mon-net
 
