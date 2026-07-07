@@ -1,5 +1,6 @@
-- targets:
-    - "node1.example.com:443"
-  labels:
-    node: "node1"
-    check: "xray-inbound"
+# Пример формата (закомментировано — свежий central без нод не должен слать false XrayCoreDown):
+# - targets:
+#     - "node1.example.com:443"
+#   labels:
+#     node: "node1"
+#     check: "xray-inbound"

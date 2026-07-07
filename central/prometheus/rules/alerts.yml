@@ -36,7 +36,7 @@ groups:
   - name: containers
     rules:
       - alert: ContainerRestarting
-        expr: increase(container_start_time_seconds{name=~"panel.*|.*xray.*|.*caddy.*|.*redis.*|.*bot.*"}[10m]) > 0
+        expr: changes(container_start_time_seconds{name=~"panel.*|.*xray.*|.*caddy.*|.*redis.*|.*bot.*", name!~"mon-.*"}[10m]) > 0
         for: 0m
         labels: { severity: warning }
         annotations:

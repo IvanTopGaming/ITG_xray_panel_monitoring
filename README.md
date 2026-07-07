@@ -28,8 +28,14 @@ Central Prometheus+Grafana+Alertmanager тянет метрики с N нод п
 
 ## Добавить ноду в мониторинг
 На central: `./scripts/add-node.sh <name> <host> [metrics_port] [xray_tcp_port]`
+Файлы `central/prometheus/targets/*.yml` из коробки содержат только закомментированные
+примеры — реальные ноды добавляются исключительно через `scripts/add-node.sh`.
 
 ## Безопасность
 Экспортёры наружу не публикуются — только через Caddy на `METRICS_PORT` с TLS + basic auth.
 Дефолтный cert self-signed (Prometheus скрейпит с insecure_skip_verify). Для настоящего LE —
 заменить `tls internal` на домен в `node-agent/Caddyfile`.
+Prometheus (9090) и Alertmanager (9093) слушают только 127.0.0.1 — доступ через SSH-туннель/VPN;
+наружу публикуется только Grafana (3000).
+Blackbox-пробы по умолчанию предпочитают IPv4 (`preferred_ip_protocol: ip4`) — для IPv6-only
+нод нужно скорректировать модуль в `central/blackbox/blackbox.yml`.
