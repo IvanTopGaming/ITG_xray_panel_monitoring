@@ -6,3 +6,6 @@ grafana-data/
 prometheus-data/
 **/data/
 *.log
+
+# живой список нод (add-node.sh пишет сюда) — не трекаем, чтобы git pull/reset не стирал
+central/prometheus/targets/*.yml
