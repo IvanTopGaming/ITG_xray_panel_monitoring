@@ -46,6 +46,7 @@ services:
     command:
       - --xray-endpoint=${XRAY_API_ENDPOINT}
       - --listen=:9550
+      - --user-traffic-metrics
     networks:
       - agent-net
       - panel-net
