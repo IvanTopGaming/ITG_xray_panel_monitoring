@@ -1,0 +1,24 @@
+{
+	admin off
+	auto_https disable_redirects
+}
+
+:{$METRICS_PORT} {
+	tls internal
+
+	basic_auth {
+		{$METRICS_USER} {$METRICS_PASSWORD_HASH}
+	}
+
+	handle_path /node/* {
+		reverse_proxy host.docker.internal:9100
+	}
+	handle_path /cadvisor/* {
+		reverse_proxy cadvisor:8080
+	}
+	handle_path /xray/* {
+		reverse_proxy xray-exporter:9550
+	}
+
+	respond "ok" 200
+}
