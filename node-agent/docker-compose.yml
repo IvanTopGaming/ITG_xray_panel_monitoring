@@ -8,6 +8,8 @@ networks:
     name: ${PANEL_NETWORK}
 
 services:
+  # node-exporter listens on :9100 with network_mode: host, binding on all host interfaces.
+  # Access must be restricted by host firewall to central Prometheus IP only.
   node-exporter:
     image: quay.io/prometheus/node-exporter:v1.8.2
     container_name: mon-node-exporter
@@ -53,10 +55,7 @@ services:
     image: caddy:2-alpine
     container_name: mon-caddy-metrics
     restart: unless-stopped
-    environment:
-      METRICS_PORT: ${METRICS_PORT}
-      METRICS_USER: ${METRICS_USER}
-      METRICS_PASSWORD_HASH: ${METRICS_PASSWORD_HASH}
+    env_file: .env
     ports:
       - "${METRICS_PORT}:${METRICS_PORT}"
     volumes:
