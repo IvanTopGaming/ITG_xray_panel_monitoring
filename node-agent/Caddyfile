@@ -4,7 +4,9 @@
 }
 
 :{$METRICS_PORT} {
-	tls internal
+	tls internal {
+		on_demand
+	}
 
 	basic_auth {
 		{$METRICS_USER} {$METRICS_PASSWORD_HASH}
@@ -17,6 +19,7 @@
 		reverse_proxy cadvisor:8080
 	}
 	handle_path /xray/* {
+		rewrite * /scrape
 		reverse_proxy xray-exporter:9550
 	}
 
