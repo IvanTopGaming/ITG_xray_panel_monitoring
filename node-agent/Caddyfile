@@ -16,7 +16,7 @@
 		reverse_proxy host.docker.internal:9100
 	}
 	handle_path /cadvisor/* {
-		reverse_proxy cadvisor:8080
+		reverse_proxy dockerstats:9487
 	}
 	handle_path /xray/* {
 		rewrite * /scrape

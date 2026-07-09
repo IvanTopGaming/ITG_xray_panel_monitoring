@@ -33,16 +33,6 @@ groups:
           summary: "Xray-ядро на {{ $labels.node }} не отвечает"
           description: "xray-exporter не отдаёт stats ИЛИ TCP на inbound-порт лёг."
 
-  - name: containers
-    rules:
-      - alert: ContainerRestarting
-        expr: changes(container_start_time_seconds{name=~"panel.*|.*xray.*|.*caddy.*|.*redis.*|.*bot.*", name!~"mon-.*"}[10m]) > 0
-        for: 0m
-        labels: { severity: warning }
-        annotations:
-          summary: "Контейнер {{ $labels.name }} на {{ $labels.node }} рестартнул"
-          description: "container_start_time вырос за последние 10 мин."
-
   - name: resources
     rules:
       - alert: DiskAlmostFull

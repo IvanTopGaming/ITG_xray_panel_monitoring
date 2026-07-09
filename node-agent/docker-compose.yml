@@ -23,19 +23,16 @@ services:
     volumes:
       - /:/host:ro,rslave
 
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    container_name: mon-cadvisor
+  # Метрики контейнеров через Docker API (docker.sock), а не cgroup/cAdvisor:
+  # у ряда VPS (LXC-вложенный Docker) cAdvisor не читает overlayfs layerdb и не
+  # видит контейнеры по имени. Этот exporter берёт docker stats напрямую.
+  # Caddy отдаёт его по историческому пути /cadvisor (central-конфиг не трогаем).
+  dockerstats:
+    image: wywywywy/docker_stats_exporter:latest
+    container_name: mon-dockerstats
     restart: unless-stopped
-    privileged: true
-    devices:
-      - /dev/kmsg
     volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - agent-net
 

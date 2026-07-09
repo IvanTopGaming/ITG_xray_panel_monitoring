@@ -16,12 +16,13 @@
       "datasource": {"type":"prometheus","uid":"prometheus"},
       "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
       "targets": [{"expr":"(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\",node=~\"$node\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\",node=~\"$node\"})) * 100","refId":"A","legendFormat":"{{mountpoint}}"}] },
-    { "id": 3, "type": "timeseries", "title": "Container CPU", "gridPos": {"h":8,"w":12,"x":0,"y":8},
+    { "id": 3, "type": "timeseries", "title": "Container CPU %", "gridPos": {"h":8,"w":12,"x":0,"y":8},
       "datasource": {"type":"prometheus","uid":"prometheus"},
-      "targets": [{"expr":"sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\",node=~\"$node\"}[5m]))","refId":"A","legendFormat":"{{name}}"}] },
+      "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
+      "targets": [{"expr":"dockerstats_cpu_usage_ratio{node=~\"$node\"}","refId":"A","legendFormat":"{{name}}"}] },
     { "id": 4, "type": "timeseries", "title": "Container memory", "gridPos": {"h":8,"w":12,"x":12,"y":8},
       "datasource": {"type":"prometheus","uid":"prometheus"},
       "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
-      "targets": [{"expr":"sum by (name) (container_memory_usage_bytes{name!=\"\",node=~\"$node\"})","refId":"A","legendFormat":"{{name}}"}] }
+      "targets": [{"expr":"dockerstats_memory_usage_bytes{node=~\"$node\"}","refId":"A","legendFormat":"{{name}}"}] }
   ]
 }
