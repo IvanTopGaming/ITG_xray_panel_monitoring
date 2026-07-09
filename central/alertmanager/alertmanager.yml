@@ -4,7 +4,7 @@ global:
 route:
   receiver: telegram
   group_by: ["node", "alertname"]
-  group_wait: 30s
+  group_wait: 10s
   group_interval: 5m
   repeat_interval: 3h
 
