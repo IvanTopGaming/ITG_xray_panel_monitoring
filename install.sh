@@ -294,6 +294,14 @@ fetch_tree() {
 
 compose() { ( cd "$COMPOSE_DIR" && docker compose "$@" ); }
 
+compose_show() {
+    if [ "$TTY" -eq 1 ]; then
+        compose "$@"
+    else
+        compose "$@" 2>&1 | sed 's/^/    /'
+    fi
+}
+
 detect_role() {
     DIR="${DIR:-.}"
     [ -d "$DIR" ] || die "$DIR не существует" "Укажи --dir на каталог мониторинга."
@@ -532,7 +540,7 @@ cmd_install() {
 
     if [ "$START" -eq 1 ]; then
         rule "Поднимаю"
-        if compose up -d 2>&1 | sed 's/^/    /'; then
+        if compose_show up -d; then
             printf '\n'
             ok "работает в ${C_BOLD}${COMPOSE_DIR}${C_RESET}"
             note "  логи:   cd $COMPOSE_DIR && docker compose logs -f"
@@ -605,8 +613,8 @@ cmd_doctor() {
 cmd_update() {
     rule "Обновляю"
     has_docker || die "docker недоступен"
-    compose pull 2>&1 | sed 's/^/    /'
-    compose up -d 2>&1 | sed 's/^/    /'
+    compose_show pull
+    compose_show up -d
     printf '\n'
     ok "обновлено"
     printf '\n'
