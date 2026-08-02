@@ -1,148 +1,136 @@
 # Развёртывание мониторинга
 
-Пошаговый runbook. Central-сервер тянет метрики со всех нод по HTTPS, алерты уходят в Telegram.
-Панель ITG при этом **не модифицируется** — agent разворачивается отдельным стеком рядом.
+Пошаговый runbook под ITG Xray Panel 3.x (шесть ролей на шести хостах). Агенты сами шлют
+метрики на central; ничего открывать на хостах панели не нужно.
 
 ## Требования
-- Docker + Docker Compose на central-сервере и на каждой ноде.
-- На ноде работает ITG Xray Panel (её gRPC Stats API `xray:10085` включён по умолчанию).
-- Сетевой доступ с central-сервера к нодам на порт `METRICS_PORT` (дефолт `8443`).
+
+- Docker + Docker Compose на central и на каждом хосте панели.
+- У central домен, который резолвится на него, и открытый из интернета `:80` — иначе ACME не
+  выдаст сертификат. IP тоже сработает, но с самоподписанным сертификатом (installer учтёт это
+  в bundle сам).
+- Панель на хосте уже поднята: агент цепляется к её docker-сети, чтобы дотянуться до `/healthz`
+  и до Xray.
 
 ---
 
-## 1. Central-сервер
+## 1. Central
 
 ```bash
-cp central/.env.example central/.env
+bash <(curl -fsSL https://raw.githubusercontent.com/IvanTopGaming/ITG_xray_panel_monitoring/main/install.sh) --role central
 ```
 
-Заполнить `central/.env`:
+Спросит:
 
-| Переменная | Что вписать |
+| Что | Зачем |
 |---|---|
-| `METRICS_USER` | логин basic-auth для скрейпа нод (напр. `metrics`) |
-| `METRICS_PASSWORD` | пароль в **плейнтексте** (тот же, чей хеш пойдёт на ноды) |
-| `GRAFANA_ADMIN_PASSWORD` | пароль admin в Grafana |
-| `PROM_RETENTION` | срок хранения метрик (дефолт `30d`) |
-| `TELEGRAM_BOT_TOKEN` | токен бота (реальный) |
-| `TELEGRAM_CHAT_ID` | chat id для алертов (голое число) |
+| домен central | Grafana и приёмник метрик, на него выпускается сертификат |
+| токен Telegram-бота | отправка алертов |
+| chat id | куда слать |
 
-Запуск:
+Пароль Grafana и токен для агентов генерируются сами и лежат в `central/.env`. В конце
+скрипт печатает **bundle** — одну строку с адресом и токеном. Сохрани её: агенты настраиваются
+из неё, а второй раз она не печатается (но её всегда можно собрать из `central/.env` вручную).
 
-```bash
-./scripts/install-central.sh
-```
-
-Доступ:
-- **Grafana** — `http://<central>:3000` (admin / `GRAFANA_ADMIN_PASSWORD`)
-- **Prometheus** (`:9090`) и **Alertmanager** (`:9093`) слушают только `127.0.0.1` —
-  ходить через SSH-туннель: `ssh -L 9090:localhost:9090 <central>`
+Проверка: `install.sh doctor --dir <каталог>` и `https://<домен>/` — там Grafana.
 
 ---
 
-## 2. Нода (рядом с панелью)
+## 2. Агенты на хостах панели
 
-**Шаг 1.** Узнать точное имя docker-сети панели, где сидит xray (префикс = имя проекта compose):
-
-```bash
-docker network ls | grep metrics-xray
-# напр.: itg_xray_panel_metrics-xray-net
-```
-
-**Шаг 2.** Сгенерить хеш пароля (тот же пароль, что `METRICS_PASSWORD` на central):
+Способ А — вместе с установкой панели, installer панели спросит сам:
 
 ```bash
-./scripts/gen-htpasswd.sh metrics '<пароль>'
+bash <(curl -fsSL .../ITG_xray_panel/main/scripts/install.sh) --mon-bundle '<bundle>'
 ```
 
-**Шаг 3.** Заполнить `node-agent/.env`:
+Способ Б — на уже поднятом хосте:
 
 ```bash
-cp node-agent/.env.example node-agent/.env
+bash <(curl -fsSL .../ITG_xray_panel_monitoring/main/install.sh) \
+  --role agent --panel-role <роль> --panel-dir ~/itg-panel --bundle '<bundle>'
 ```
 
-| Переменная | Что вписать |
+`--panel-role` — одна из `data cron master node sub bot`. Что из этого следует:
+
+| Роль | docker-сеть панели | Цель `/healthz` | Профили compose |
+|---|---|---|---|
+| `master` | `<проект>_panel-net` | `backend:5000` | `healthz` |
+| `node` | `<проект>_panel-net` | `backend:5000` | `healthz,xray` |
+| `sub` | `<проект>_sub-net` | `backend:5000` (алиас `panel-sub-backend`) | `healthz` |
+| `bot` | `<проект>_bot-net` | `bot-api:5000` | `healthz` |
+| `cron` | `<проект>_cron-net` | `cron:5000` | `healthz` |
+| `data` | `<проект>_default` | — | `data` |
+
+`<проект>` — имя каталога панели (обычно `itg-panel`). Installer находит сеть через
+`docker network ls` сам; если панель стоит в каталоге с другим именем, достаточно указать
+`--panel-dir`.
+
+Имя хоста в мониторинге по умолчанию — `PANEL_DOMAIN` из `.env` панели, иначе `hostname`.
+Переопределяется флагом `--host-name`.
+
+Проверка: `install.sh doctor --dir ~/itg-monitoring`. Секция «Связь с central» бьёт живым
+запросом с токеном: `400` — доехали и авторизовались, `401` — токен не тот, `000` — не пускает сеть.
+
+---
+
+## 3. Data tier — что происходит с секретами
+
+На роли `data` агент читает `POSTGRES_USER/PASSWORD/DB` и `REDIS_PANEL_PASSWORD` из `.env`
+панели рядом и собирает из них строки подключения. Ходит он внутрь docker-сети по именам
+`postgres` и `redis`, поэтому проверка имени в сертификате отключена:
+
+- Postgres — `sslmode=require`;
+- Redis — `REDIS_EXPORTER_SKIP_TLS_VERIFICATION=true`, пользователь `panel`.
+
+Сертификат data tier выписан на `DATA_HOSTNAME`, и по внутреннему имени `verify-full` не прошёл
+бы никогда. Соединение при этом шифруется и не покидает машину.
+
+---
+
+## 4. Что приезжает в Grafana
+
+| Дашборд | О чём |
 |---|---|
-| `METRICS_PORT` | порт метрик наружу (дефолт `8443`) |
-| `METRICS_USER` | тот же логин, что на central |
-| `METRICS_PASSWORD_HASH` | хеш из шага 2 — **вставь строку из `gen-htpasswd.sh` как есть** (там `$` уже удвоены до `$$`; без экранирования docker compose побьёт хеш и Caddy вернёт 401) |
-| `XRAY_API_ENDPOINT` | `xray:10085` (подтверждено, менять не надо) |
-| `PANEL_NETWORK` | имя сети из шага 1 |
+| `Fleet Overview` | все хосты с фильтром по роли: сколько онлайн, CPU/RAM/диск/сеть |
+| `Host Detail` | один хост подробно, включая его контейнеры |
+| `Panel Services` | `/healthz` бэкендов, состояние контейнеров панели, жив ли xray-exporter |
+| `Xray Traffic` | uplink/downlink по inbound, топ-20 юзеров по трафику |
+| `Data Tier` | Postgres и Redis |
 
-**Шаг 4.** Запуск:
+Алерты уходят в Telegram, группировка по `host` + `alertname`, повтор раз в 3 часа.
 
-```bash
-./scripts/install-node.sh
-```
-
-**Шаг 5.** Проверить, что все три эндпоинта отдают метрики:
-
-```bash
-curl -sk -u metrics:'<пароль>' https://localhost:8443/node/metrics     | head -3
-curl -sk -u metrics:'<пароль>' https://localhost:8443/cadvisor/metrics | head -3
-curl -sk -u metrics:'<пароль>' https://localhost:8443/xray/metrics     | head -3
-```
-
-Если `/xray/metrics` пустой — проверь `PANEL_NETWORK` и что xray-exporter в этой сети
-(`docker logs mon-xray-exporter`).
+Отдельно про `HostDown`: при push-модели падение видно по тому, что данные перестали приходить
+(`time() - last_over_time(node_time_seconds[1d]) > 90`). Метрика `node_time_seconds` выбрана не
+случайно — её значение и есть время, поэтому формула работает и через сутки после падения, когда
+серия давно вне обычного пятиминутного окна.
 
 ---
 
-## 3. Файрвол на ноде (обязательно)
+## 5. Миграция со старой pull-схемы
 
-Экспортёры не должны торчать в открытый интернет. `caddy-metrics` защищён TLS+basic-auth,
-но `node-exporter` в host-режиме биндит `:9100` напрямую — его закрываем обязательно.
+1. На каждой ноде снести старый агент:
+   ```bash
+   cd <старый репозиторий> && docker compose -f node-agent/docker-compose.yml down -v
+   ```
+   Заодно можно закрыть в firewall `METRICS_PORT` (8443) — он больше не нужен.
+2. На central: `docker compose down` в `central/`, обновить репозиторий, поставить заново через
+   `install.sh --role central`.
+3. На каждом хосте панели — агент (раздел 2).
 
-```bash
-ufw allow from <CENTRAL_IP> to any port 8443 proto tcp
-ufw allow from <CENTRAL_IP> to any port 9100 proto tcp
-ufw deny 8443
-ufw deny 9100
-```
-
----
-
-## 4. Зарегистрировать ноду в мониторинге (на central)
-
-```bash
-./scripts/add-node.sh <name> <node-host>          # metrics_port=8443, xray_tcp_port=443 по дефолту
-./scripts/add-node.sh <name> <node-host> 9443 443 # если METRICS_PORT нестандартный
-```
-
-Скрипт дописывает таргет в три file_sd файла (`central/prometheus/targets/`) и дёргает
-Prometheus reload. Ноды в этих файлах изначально закомменчены — добавляй только через скрипт.
+Лейблы переехали `node` → `host` + `role`, поэтому старые ряды не склеятся с новыми: дашборды
+покажут историю как обрыв. Проще начать с чистого тома Prometheus, а старый оставить рядом,
+пока история ещё нужна.
 
 ---
 
-## Важные нюансы
+## 6. Разбор проблем
 
-- **Одна пара кредов.** `METRICS_USER`/`METRICS_PASSWORD` на central (плейнтекст) и
-  `METRICS_USER`/`METRICS_PASSWORD_HASH` на ноде (bcrypt того же пароля) — это один секрет.
-  Не совпадут — скрейп получит `401`.
-- **Панельный `panel-metrics` не трогаем и не скрейпим.** Он нужен встроенной статистике
-  панели (backend ходит к нему на `metrics:9100`). Наш стек полностью независим.
-- **Self-signed TLS.** По умолчанию `caddy-metrics` отдаёт self-signed cert, Prometheus
-  скрейпит с `insecure_skip_verify`. Для настоящего Let's Encrypt — заменить `tls internal`
-  на домен в `node-agent/Caddyfile` (нужен свободный `:443`/`:80`, которых на ноде нет —
-  поэтому дефолт self-signed).
-- **TLS-сертификат панели** мониторится blackbox'ом (`PanelCertExpiring`, алерт < 14 дней).
-
----
-
-## Проверка после развёртывания
-
-На central:
-
-```bash
-# все таргеты UP?
-curl -s http://localhost:9090/api/v1/targets | \
-  jq -r '.data.activeTargets[] | "\(.labels.job) \(.labels.node // .labels.instance) \(.health)"'
-
-# правила загружены (10, health=ok)?
-curl -s http://localhost:9090/api/v1/rules | jq '[.data.groups[].rules[]] | length'
-
-# Alertmanager подхвачен?
-curl -s http://localhost:9090/api/v1/alertmanagers | jq '.data.activeAlertmanagers | length'
-```
-
-В Grafana — папка **ITG Monitoring**, дашборды: Nodes Overview, Node Detail, Xray Traffic, Availability.
+| Симптом | Куда смотреть |
+|---|---|
+| в Grafana нет хоста | `docker logs mon-prom-agent` на хосте: ошибки `remote_write` видны сразу |
+| `doctor` показывает `401` | токен разошёлся с central — переустановить агент со свежим bundle |
+| `doctor` показывает `000` | DNS/сеть/сертификат: с IP-адресом central нужен `MON_TLS_INSECURE=true` (это ставит bundle) |
+| `PanelUnhealthy` на живой панели | агент цепляется не к той сети — проверить `PANEL_NETWORK` в `agent/.env` |
+| нет метрик Xray | роль агента не `node` (нет профиля `xray`), либо `XRAY_API_ENDPOINT` не `xray:10085` |
+| ACME не выдаёт сертификат | `:80` закрыт снаружи или домен не резолвится на central |

@@ -1,0 +1,43 @@
+{
+  "uid": "fleet-overview",
+  "title": "Fleet Overview",
+  "tags": ["itg", "fleet"],
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [
+    { "name": "role", "type": "query", "datasource": {"type":"prometheus","uid":"prometheus"},
+      "query": "label_values(node_time_seconds, role)", "includeAll": true, "multi": true, "current": {} }
+  ]},
+  "panels": [
+    { "id": 1, "type": "stat", "title": "Хостов онлайн", "gridPos": {"h":4,"w":6,"x":0,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"count(count by (host) (node_time_seconds{role=~\"$role\"}))","refId":"A"}] },
+    { "id": 2, "type": "stat", "title": "Хостов не отвечает", "gridPos": {"h":4,"w":6,"x":6,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"thresholds": {"mode":"absolute","steps":[{"color":"green","value":null},{"color":"red","value":1}]}}, "overrides": []},
+      "targets": [{"expr":"count(count by (host) ((time() - max by (host) (last_over_time(node_time_seconds{role=~\"$role\"}[1d]))) > 90)) or vector(0)","refId":"A"}] },
+    { "id": 3, "type": "table", "title": "Хосты по ролям", "gridPos": {"h":8,"w":12,"x":12,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"time() - max by (host, role) (last_over_time(node_time_seconds{role=~\"$role\"}[1d]))","refId":"A","format":"table","instant":true,"legendFormat":"{{host}}"}] },
+    { "id": 4, "type": "timeseries", "title": "CPU % по хостам", "gridPos": {"h":8,"w":12,"x":0,"y":4},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "max": 100, "min": 0}, "overrides": []},
+      "targets": [{"expr":"(1 - avg by (host) (rate(node_cpu_seconds_total{mode=\"idle\",role=~\"$role\"}[5m]))) * 100","refId":"A","legendFormat":"{{host}}"}] },
+    { "id": 5, "type": "timeseries", "title": "RAM % по хостам", "gridPos": {"h":8,"w":12,"x":0,"y":12},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "max": 100, "min": 0}, "overrides": []},
+      "targets": [{"expr":"(1 - (node_memory_MemAvailable_bytes{role=~\"$role\"} / node_memory_MemTotal_bytes{role=~\"$role\"})) * 100","refId":"A","legendFormat":"{{host}}"}] },
+    { "id": 6, "type": "timeseries", "title": "Диск % по хостам", "gridPos": {"h":8,"w":12,"x":12,"y":12},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "max": 100, "min": 0}, "overrides": []},
+      "targets": [{"expr":"(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\",role=~\"$role\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\",role=~\"$role\"})) * 100","refId":"A","legendFormat":"{{host}} {{mountpoint}}"}] },
+    { "id": 7, "type": "timeseries", "title": "Сеть in (бит/с)", "gridPos": {"h":8,"w":12,"x":0,"y":20},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bps"}, "overrides": []},
+      "targets": [{"expr":"sum by (host) (rate(node_network_receive_bytes_total{device!~\"lo|docker.*|veth.*|br-.*\",role=~\"$role\"}[5m]) * 8)","refId":"A","legendFormat":"{{host}}"}] },
+    { "id": 8, "type": "timeseries", "title": "Сеть out (бит/с)", "gridPos": {"h":8,"w":12,"x":12,"y":20},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bps"}, "overrides": []},
+      "targets": [{"expr":"sum by (host) (rate(node_network_transmit_bytes_total{device!~\"lo|docker.*|veth.*|br-.*\",role=~\"$role\"}[5m]) * 8)","refId":"A","legendFormat":"{{host}}"}] }
+  ]
+}

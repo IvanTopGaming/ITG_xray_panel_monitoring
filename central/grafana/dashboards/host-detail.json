@@ -1,0 +1,46 @@
+{
+  "uid": "host-detail",
+  "title": "Host Detail",
+  "tags": ["itg", "host"],
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [
+    { "name": "host", "type": "query", "datasource": {"type":"prometheus","uid":"prometheus"},
+      "query": "label_values(node_time_seconds, host)", "includeAll": false, "multi": false, "current": {} }
+  ]},
+  "panels": [
+    { "id": 1, "type": "timeseries", "title": "Load average", "gridPos": {"h":8,"w":12,"x":0,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [
+        {"expr":"node_load1{host=~\"$host\"}","refId":"A","legendFormat":"load1"},
+        {"expr":"node_load5{host=~\"$host\"}","refId":"B","legendFormat":"load5"}
+      ] },
+    { "id": 2, "type": "timeseries", "title": "CPU %", "gridPos": {"h":8,"w":12,"x":12,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "max": 100, "min": 0}, "overrides": []},
+      "targets": [{"expr":"(1 - avg by (host) (rate(node_cpu_seconds_total{mode=\"idle\",host=~\"$host\"}[5m]))) * 100","refId":"A","legendFormat":"cpu"}] },
+    { "id": 3, "type": "timeseries", "title": "Память", "gridPos": {"h":8,"w":12,"x":0,"y":8},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "targets": [{"expr":"node_memory_MemTotal_bytes{host=~\"$host\"} - node_memory_MemAvailable_bytes{host=~\"$host\"}","refId":"A","legendFormat":"занято"}] },
+    { "id": 4, "type": "timeseries", "title": "Диск %", "gridPos": {"h":8,"w":12,"x":12,"y":8},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "max": 100, "min": 0}, "overrides": []},
+      "targets": [{"expr":"(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\",host=~\"$host\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\",host=~\"$host\"})) * 100","refId":"A","legendFormat":"{{mountpoint}}"}] },
+    { "id": 5, "type": "timeseries", "title": "Сеть (бит/с)", "gridPos": {"h":8,"w":24,"x":0,"y":16},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bps"}, "overrides": []},
+      "targets": [
+        {"expr":"rate(node_network_receive_bytes_total{device!~\"lo|docker.*|veth.*|br-.*\",host=~\"$host\"}[5m]) * 8","refId":"A","legendFormat":"in {{device}}"},
+        {"expr":"rate(node_network_transmit_bytes_total{device!~\"lo|docker.*|veth.*|br-.*\",host=~\"$host\"}[5m]) * 8","refId":"B","legendFormat":"out {{device}}"}
+      ] },
+    { "id": 6, "type": "timeseries", "title": "CPU контейнеров", "gridPos": {"h":8,"w":12,"x":0,"y":24},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
+      "targets": [{"expr":"dockerstats_cpu_usage_ratio{host=~\"$host\"}","refId":"A","legendFormat":"{{name}}"}] },
+    { "id": 7, "type": "timeseries", "title": "Память контейнеров", "gridPos": {"h":8,"w":12,"x":12,"y":24},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "targets": [{"expr":"dockerstats_memory_usage_bytes{host=~\"$host\"}","refId":"A","legendFormat":"{{name}}"}] }
+  ]
+}

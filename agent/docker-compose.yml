@@ -1,0 +1,139 @@
+name: itg-mon-agent
+
+networks:
+  agent-net:
+    driver: bridge
+  panel-net:
+    external: true
+    name: ${PANEL_NETWORK}
+
+services:
+  render:
+    image: alpine:3.20
+    container_name: mon-agent-render
+    env_file: .env
+    command:
+      - /bin/sh
+      - -c
+      - |
+        apk add --no-cache gettext >/dev/null
+        cat /in/base.yml > /tmp/agent.yml
+        if [ "$$MON_ROLE" = "data" ]; then
+          cat /in/data.yml >> /tmp/agent.yml
+        else
+          cat /in/healthz.yml >> /tmp/agent.yml
+        fi
+        if [ "$$MON_ROLE" = "node" ]; then
+          cat /in/xray.yml >> /tmp/agent.yml
+        fi
+        envsubst '$$MON_HOST_NAME $$MON_ROLE $$MON_ENDPOINT $$MON_TOKEN $$MON_TLS_INSECURE $$HEALTHZ_TARGET' \
+          < /tmp/agent.yml > /out/agent.yml
+    volumes:
+      - ./prometheus:/in:ro
+      - agent-config:/out
+    networks:
+      - agent-net
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.8.2
+    container_name: mon-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=127.0.0.1:9100
+      - --collector.systemd
+      - --collector.processes
+    pid: host
+    network_mode: host
+    volumes:
+      - /:/host:ro,rslave
+
+  dockerstats:
+    image: wywywywy/docker_stats_exporter:${DOCKERSTATS_TAG:-latest}
+    container_name: mon-dockerstats
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9487:9487"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - agent-net
+
+  blackbox:
+    image: prom/blackbox-exporter:v0.26.0
+    container_name: mon-blackbox
+    restart: unless-stopped
+    profiles: ["healthz"]
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    ports:
+      - "127.0.0.1:9115:9115"
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks:
+      - agent-net
+      - panel-net
+
+  xray-exporter:
+    image: ghcr.io/compassvpn/xray-exporter:latest
+    container_name: mon-xray-exporter
+    restart: unless-stopped
+    profiles: ["xray"]
+    command:
+      - --xray-endpoint=${XRAY_API_ENDPOINT:-xray:10085}
+      - --listen=:9550
+      - --user-traffic-metrics
+    ports:
+      - "127.0.0.1:9550:9550"
+    networks:
+      - agent-net
+      - panel-net
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: mon-postgres-exporter
+    restart: unless-stopped
+    profiles: ["data"]
+    environment:
+      DATA_SOURCE_NAME: ${PG_DSN:-}
+    ports:
+      - "127.0.0.1:9187:9187"
+    networks:
+      - agent-net
+      - panel-net
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    container_name: mon-redis-exporter
+    restart: unless-stopped
+    profiles: ["data"]
+    environment:
+      REDIS_ADDR: ${REDIS_ADDR:-}
+      REDIS_USER: panel
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_EXPORTER_SKIP_TLS_VERIFICATION: "true"
+    ports:
+      - "127.0.0.1:9121:9121"
+    networks:
+      - agent-net
+      - panel-net
+
+  prom-agent:
+    image: prom/prometheus:v3.1.0
+    container_name: mon-prom-agent
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      render:
+        condition: service_completed_successfully
+    command:
+      - --config.file=/etc/prometheus/agent.yml
+      - --agent
+      - --storage.agent.path=/prometheus
+    volumes:
+      - agent-config:/etc/prometheus:ro
+      - agent-data:/prometheus
+
+volumes:
+  agent-config:
+  agent-data:

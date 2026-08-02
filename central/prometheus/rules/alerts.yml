@@ -1,37 +1,46 @@
 groups:
   - name: availability
     rules:
-      - alert: NodeDown
-        expr: up{job="node"} == 0
-        for: 10s
+      - alert: HostDown
+        expr: (time() - max by (host, role) (last_over_time(node_time_seconds[1d]))) > 90
         labels: { severity: critical }
         annotations:
-          summary: "Нода {{ $labels.node }} не скрейпится"
-          description: "Prometheus не может собрать метрики agent'а > 10 сек."
+          summary: "Хост {{ $labels.host }} ({{ $labels.role }}) не шлёт метрики"
+          description: "Данные не приходят > 90 сек. Хост лёг или потерял связь с central."
 
-      - alert: PanelDown
-        expr: probe_success{job="blackbox-http"} == 0
-        for: 10s
+      - alert: PanelUnhealthy
+        expr: probe_success{job="healthz"} == 0
+        for: 30s
         labels: { severity: critical }
         annotations:
-          summary: "Панель {{ $labels.node }} недоступна"
-          description: "Blackbox HTTP-проба панели не проходит > 10 сек."
+          summary: "Бэкенд панели на {{ $labels.host }} ({{ $labels.role }}) нездоров"
+          description: "/healthz не отвечает 200 > 30 сек. Контейнер жив, приложение — нет."
 
-      - alert: PanelCertExpiring
-        expr: (probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time()) / 86400 < 14
-        for: 1h
+      - alert: XrayDown
+        expr: up{job="xray"} == 0
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "Xray-ядро на {{ $labels.host }} не отвечает"
+          description: "xray-exporter не может забрать stats по gRPC > 30 сек."
+
+      - alert: ContainerGone
+        expr: |
+          count by (host, name) (dockerstats_cpu_usage_ratio{name=~"panel-.*|xray-core|socket-proxy"} offset 10m)
+          unless count by (host, name) (dockerstats_cpu_usage_ratio{name=~"panel-.*|xray-core|socket-proxy"})
+        for: 1m
         labels: { severity: warning }
         annotations:
-          summary: "TLS-сертификат панели {{ $labels.node }} истекает"
-          description: "Осталось {{ printf \"%.0f\" $value }} дн. (< 14)."
+          summary: "Контейнер {{ $labels.name }} на {{ $labels.host }} исчез"
+          description: "Контейнер панели работал 10 минут назад, сейчас его нет: остановлен или удалён."
 
-      - alert: XrayCoreDown
-        expr: up{job="xray"} == 0 or probe_success{job="blackbox-tcp"} == 0
-        for: 10s
-        labels: { severity: critical }
+      - alert: ExporterDown
+        expr: up{job!~"prometheus|xray"} == 0
+        for: 2m
+        labels: { severity: warning }
         annotations:
-          summary: "Xray-ядро на {{ $labels.node }} не отвечает"
-          description: "xray-exporter не отдаёт stats ИЛИ TCP на inbound-порт лёг."
+          summary: "Экспортёр {{ $labels.job }} на {{ $labels.host }} не отвечает"
+          description: "Агент не может его скрейпить > 2 мин — эта часть метрик хоста слепая."
 
   - name: resources
     rules:
@@ -40,7 +49,7 @@ groups:
         for: 10m
         labels: { severity: warning }
         annotations:
-          summary: "Диск на {{ $labels.node }} заполнен > 85%"
+          summary: "Диск на {{ $labels.host }} заполнен > 85%"
           description: "{{ $labels.mountpoint }}: {{ printf \"%.1f\" $value }}%."
 
       - alert: HighMemory
@@ -48,33 +57,74 @@ groups:
         for: 10m
         labels: { severity: warning }
         annotations:
-          summary: "Память на {{ $labels.node }} > 90%"
+          summary: "Память на {{ $labels.host }} > 90%"
           description: "Использование RAM устойчиво высокое."
 
       - alert: HighCPU
-        expr: (1 - avg by (node) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 90
+        expr: (1 - avg by (host) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 90
         for: 15m
         labels: { severity: warning }
         annotations:
-          summary: "CPU на {{ $labels.node }} > 90%"
+          summary: "CPU на {{ $labels.host }} > 90%"
           description: "Загрузка CPU устойчиво высокая > 15 мин."
 
   - name: traffic
     rules:
       - alert: TrafficSpike
-        expr: sum by (node) (rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[5m]) * 8) > 5e9
+        expr: sum by (host) (rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[5m]) * 8) > 5e9
         for: 5m
         labels: { severity: warning }
         annotations:
-          summary: "Аномальный всплеск трафика на {{ $labels.node }}"
+          summary: "Аномальный всплеск трафика на {{ $labels.host }}"
           description: "Входящий трафик > 5 Гбит/с ({{ $value | humanize }} бит/сек). DDoS/абьюз?"
 
       - alert: TrafficDropAnomaly
         expr: |
-          sum by (node) (rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[5m]))
-          < 0.05 * sum by (node) (rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[1h] offset 1h))
+          sum by (host) (rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[5m]))
+          < 0.05 * sum by (host) (rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[1h] offset 1h))
         for: 15m
         labels: { severity: warning }
         annotations:
-          summary: "Трафик на {{ $labels.node }} аномально просел"
+          summary: "Трафик на {{ $labels.host }} аномально просел"
           description: "Текущий трафик < 5% от среднего за прошлый час. Проблема с ядром?"
+
+  - name: data-tier
+    rules:
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Postgres на {{ $labels.host }} недоступен"
+          description: "postgres_exporter не может подключиться > 1 мин. Вся панель встанет."
+
+      - alert: PostgresConnectionsHigh
+        expr: sum by (host) (pg_stat_activity_count) / max by (host) (pg_settings_max_connections) > 0.8
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Postgres на {{ $labels.host }}: коннектов > 80% лимита"
+          description: "{{ printf \"%.0f\" $value }}% от max_connections."
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Redis на {{ $labels.host }} недоступен"
+          description: "Шина bot:events и снапшоты нод не работают."
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8 and redis_memory_max_bytes > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Redis на {{ $labels.host }}: память > 80% лимита"
+          description: "{{ printf \"%.0f\" $value }}% от maxmemory — близко к вытеснению ключей."
+
+      - alert: RedisRejectedConnections
+        expr: increase(redis_rejected_connections_total[5m]) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Redis на {{ $labels.host }} отвергает подключения"
+          description: "Достигнут maxclients — часть сервисов панели не достучится."
