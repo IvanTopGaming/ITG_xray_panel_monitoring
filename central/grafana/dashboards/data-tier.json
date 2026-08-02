@@ -1,0 +1,45 @@
+{
+  "uid": "data-tier",
+  "title": "Data Tier",
+  "tags": ["itg", "postgres", "redis"],
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [
+    { "name": "host", "type": "query", "datasource": {"type":"prometheus","uid":"prometheus"},
+      "query": "label_values(pg_up, host)", "includeAll": true, "multi": true, "current": {} }
+  ]},
+  "panels": [
+    { "id": 1, "type": "stat", "title": "Postgres", "gridPos": {"h":5,"w":6,"x":0,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"mappings": [
+        {"type":"value","options":{"0":{"text":"НЕДОСТУПЕН","color":"red","index":0},"1":{"text":"OK","color":"green","index":1}}}
+      ]}, "overrides": []},
+      "targets": [{"expr":"pg_up{host=~\"$host\"}","refId":"A","legendFormat":"{{host}}"}] },
+    { "id": 2, "type": "stat", "title": "Redis", "gridPos": {"h":5,"w":6,"x":6,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"mappings": [
+        {"type":"value","options":{"0":{"text":"НЕДОСТУПЕН","color":"red","index":0},"1":{"text":"OK","color":"green","index":1}}}
+      ]}, "overrides": []},
+      "targets": [{"expr":"redis_up{host=~\"$host\"}","refId":"A","legendFormat":"{{host}}"}] },
+    { "id": 3, "type": "timeseries", "title": "Postgres: коннекты и лимит", "gridPos": {"h":8,"w":12,"x":12,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [
+        {"expr":"sum by (host) (pg_stat_activity_count{host=~\"$host\"})","refId":"A","legendFormat":"активные {{host}}"},
+        {"expr":"max by (host) (pg_settings_max_connections{host=~\"$host\"})","refId":"B","legendFormat":"лимит {{host}}"}
+      ] },
+    { "id": 4, "type": "timeseries", "title": "Postgres: размер БД", "gridPos": {"h":8,"w":12,"x":0,"y":8},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "targets": [{"expr":"pg_database_size_bytes{host=~\"$host\"}","refId":"A","legendFormat":"{{datname}}"}] },
+    { "id": 5, "type": "timeseries", "title": "Redis: память", "gridPos": {"h":8,"w":12,"x":12,"y":8},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "targets": [{"expr":"redis_memory_used_bytes{host=~\"$host\"}","refId":"A","legendFormat":"использовано {{host}}"}] },
+    { "id": 6, "type": "timeseries", "title": "Redis: клиенты", "gridPos": {"h":8,"w":12,"x":0,"y":16},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"redis_connected_clients{host=~\"$host\"}","refId":"A","legendFormat":"{{host}}"}] },
+    { "id": 7, "type": "timeseries", "title": "Redis: отвергнутые подключения", "gridPos": {"h":8,"w":12,"x":12,"y":16},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"increase(redis_rejected_connections_total{host=~\"$host\"}[5m])","refId":"A","legendFormat":"{{host}}"}] }
+  ]
+}

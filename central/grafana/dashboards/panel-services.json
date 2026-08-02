@@ -1,0 +1,36 @@
+{
+  "uid": "panel-services",
+  "title": "Panel Services",
+  "tags": ["itg", "panel"],
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [
+    { "name": "host", "type": "query", "datasource": {"type":"prometheus","uid":"prometheus"},
+      "query": "label_values(node_time_seconds, host)", "includeAll": true, "multi": true, "current": {} }
+  ]},
+  "panels": [
+    { "id": 1, "type": "stat", "title": "Здоровье бэкендов", "gridPos": {"h":5,"w":12,"x":0,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"mappings": [
+        {"type":"value","options":{"0":{"text":"НЕЗДОРОВ","color":"red","index":0},"1":{"text":"OK","color":"green","index":1}}}
+      ]}, "overrides": []},
+      "targets": [{"expr":"probe_success{job=\"healthz\",host=~\"$host\"}","refId":"A","legendFormat":"{{host}} ({{role}})"}] },
+    { "id": 2, "type": "stat", "title": "Xray-экспортёр", "gridPos": {"h":5,"w":12,"x":12,"y":0},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"mappings": [
+        {"type":"value","options":{"0":{"text":"НЕ ОТВЕЧАЕТ","color":"red","index":0},"1":{"text":"OK","color":"green","index":1}}}
+      ]}, "overrides": []},
+      "targets": [{"expr":"up{job=\"xray\",host=~\"$host\"}","refId":"A","legendFormat":"{{host}}"}] },
+    { "id": 3, "type": "timeseries", "title": "Время ответа /healthz", "gridPos": {"h":8,"w":24,"x":0,"y":5},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "targets": [{"expr":"probe_duration_seconds{job=\"healthz\",host=~\"$host\"}","refId":"A","legendFormat":"{{host}} ({{role}})"}] },
+    { "id": 4, "type": "table", "title": "Контейнеры панели", "gridPos": {"h":10,"w":12,"x":0,"y":13},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "targets": [{"expr":"dockerstats_cpu_usage_ratio{name=~\"panel-.*|xray-core|socket-proxy\",host=~\"$host\"}","refId":"A","format":"table","instant":true}] },
+    { "id": 5, "type": "timeseries", "title": "Память контейнеров панели", "gridPos": {"h":10,"w":12,"x":12,"y":13},
+      "datasource": {"type":"prometheus","uid":"prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "targets": [{"expr":"dockerstats_memory_usage_bytes{name=~\"panel-.*|xray-core\",host=~\"$host\"}","refId":"A","legendFormat":"{{host}} {{name}}"}] }
+  ]
+}
