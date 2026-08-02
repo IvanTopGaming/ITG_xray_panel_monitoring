@@ -3,7 +3,7 @@ global:
 
 route:
   receiver: telegram
-  group_by: ["node", "alertname"]
+  group_by: ["host", "alertname"]
   group_wait: 10s
   group_interval: 5m
   repeat_interval: 3h
@@ -18,7 +18,7 @@ receivers:
         message: |
           <b>{{ .Status | toUpper }}</b> {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }}
           {{ range .Alerts }}<b>{{ .Labels.alertname }}</b> — {{ .Labels.severity }}
-          node: {{ .Labels.node }}
+          {{ .Labels.host }} · {{ .Labels.role }}
           {{ .Annotations.summary }}
           {{ .Annotations.description }}
           {{ end }}
