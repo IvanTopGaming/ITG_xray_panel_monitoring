@@ -25,11 +25,22 @@ groups:
           description: "xray-exporter не может забрать stats по gRPC > 30 сек."
 
       - alert: ContainerGone
-        expr: (time() - max by (host, name) (last_over_time(dockerstats_cpu_usage_ratio[1d]))) > 120
+        expr: |
+          count by (host, name) (dockerstats_cpu_usage_ratio{name=~"panel-.*|xray-core|socket-proxy"} offset 10m)
+          unless count by (host, name) (dockerstats_cpu_usage_ratio{name=~"panel-.*|xray-core|socket-proxy"})
+        for: 1m
         labels: { severity: warning }
         annotations:
           summary: "Контейнер {{ $labels.name }} на {{ $labels.host }} исчез"
-          description: "Метрики контейнера не приходят > 2 мин: остановлен или удалён."
+          description: "Контейнер панели работал 10 минут назад, сейчас его нет: остановлен или удалён."
+
+      - alert: ExporterDown
+        expr: up{job!~"prometheus|xray"} == 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Экспортёр {{ $labels.job }} на {{ $labels.host }} не отвечает"
+          description: "Агент не может его скрейпить > 2 мин — эта часть метрик хоста слепая."
 
   - name: resources
     rules:

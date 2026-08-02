@@ -1,41 +1,89 @@
 # ITG Xray Panel — мониторинг
 
-Pull-based мониторинг xray-нод под [ITG Xray Panel](https://github.com/IvanTopGaming/ITG_xray_panel).
-Central Prometheus+Grafana+Alertmanager тянет метрики с N нод по HTTPS, алерты — в Telegram.
+Push-мониторинг всех хостов [ITG Xray Panel](https://github.com/IvanTopGaming/ITG_xray_panel) 3.x.
+На каждом хосте агент собирает метрики локально и шлёт их на central по HTTPS; central хранит,
+рисует в Grafana и шлёт алерты в Telegram.
+
+**Хост мониторинга не публикует ни одного порта.** Экспортёры слушают только на `127.0.0.1`,
+наружу уходит одно исходящее соединение. Ни firewall-правил под IP central, ни basic-auth на
+каждой машине, ни ручной регистрации хоста — он появляется в Grafana сам.
 
 ## Что мониторится
-- Загрузка ноды: CPU/RAM/disk/load/network (node_exporter)
-- Контейнеры панели: CPU/mem/рестарты (cAdvisor)
-- Трафик xray по inbound/user (xray-exporter через gRPC Stats API)
-- Доступность панели (HTTP 200 + TLS cert expiry) и xray-инбаундов (TCP) — blackbox снаружи
-- Алерты в Telegram: нода/панель/ядро down, cert expiring, диск/RAM/CPU, всплеск/просадка трафика
 
-## Требования
-- Docker + Docker Compose на central-сервере и на каждой ноде.
-- На ноде включён gRPC Stats API xray (у ITG panel включён по умолчанию).
-- Порт `METRICS_PORT` (дефолт 8443) открыт на ноде для IP central-сервера (firewall).
+| Роль панели | Что снимается |
+|---|---|
+| все | CPU / RAM / диск / сеть / load, метрики всех контейнеров |
+| `master`, `node`, `sub`, `bot`, `cron` | `/healthz` бэкенда изнутри сети панели |
+| `node` | трафик Xray по inbound и по юзерам (gRPC Stats API) |
+| `data` | Postgres (коннекты, размер БД) и Redis (память, клиенты, отказы) |
 
-## Установка central
-1. `cp central/.env.example central/.env` и заполнить.
-2. `./scripts/install-central.sh`
-3. Grafana: http://<central>:3000 (admin / GRAFANA_ADMIN_PASSWORD).
+Алерты в Telegram: хост перестал слать метрики, бэкенд нездоров, ядро Xray не отвечает,
+контейнер исчез, диск/RAM/CPU, всплеск и просадка трафика, Postgres/Redis недоступны или на пределе.
 
-## Установка ноды
-1. Скопировать репо на ноду.
-2. Хеш пароля: `./scripts/gen-htpasswd.sh metrics <password>` → строки `METRICS_USER`/`METRICS_PASSWORD_HASH` в `node-agent/.env` (хеш с экранированными `$$`, вставлять как есть).
-3. Заполнить `node-agent/.env`: `METRICS_PORT`, `XRAY_API_ENDPOINT`, `PANEL_NETWORK` (см. `docker network ls`).
-4. `./scripts/install-node.sh`
+## Установка
 
-## Добавить ноду в мониторинг
-На central: `./scripts/add-node.sh <name> <host> [metrics_port] [xray_tcp_port]`
-Файлы `central/prometheus/targets/*.yml` из коробки содержат только закомментированные
-примеры — реальные ноды добавляются исключительно через `scripts/add-node.sh`.
+**Сначала central** — он печатает bundle-строку, из которой агенты берут адрес и токен:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/IvanTopGaming/ITG_xray_panel_monitoring/main/install.sh) --role central
+```
+
+Спросит домен (на него Caddy выпустит сертификат через ACME — домен должен резолвиться сюда,
+`:80` быть открыт из интернета) и данные Telegram-бота. В конце покажет пароль Grafana и bundle.
+
+**Потом агент на каждом хосте панели** — двумя способами, они равнозначны:
+
+```bash
+# 1. вместе с установкой панели: installer панели спросит про мониторинг сам
+bash <(curl -fsSL .../ITG_xray_panel/main/scripts/install.sh) --mon-bundle '<bundle>'
+
+# 2. отдельно, на уже поднятом хосте
+bash <(curl -fsSL .../ITG_xray_panel_monitoring/main/install.sh) \
+  --role agent --panel-role node --panel-dir ~/itg-panel --bundle '<bundle>'
+```
+
+Агент сам определит docker-сеть панели, цель для `/healthz` и набор экспортёров под свою роль.
+На роли `data` он ещё и вытащит пароли Postgres/Redis из `.env` панели рядом.
+
+Дальше тем же скриптом:
+
+| | |
+| --- | --- |
+| `install.sh doctor` | что запущено и доходит ли до central (агент проверяет токен живым запросом) |
+| `install.sh update` | `docker compose pull` + `up -d` |
+
+## Как это устроено
+
+```
+хост панели                                   central
+┌───────────────────────────────┐             ┌──────────────────────────┐
+│ prom-agent (host netns)       │  HTTPS      │ Caddy :443               │
+│  ├─ node-exporter  127.0.0.1  │ ──────────► │  ├─ /push → prometheus   │
+│  ├─ dockerstats    127.0.0.1  │  Bearer     │  └─ /     → grafana      │
+│  ├─ blackbox       127.0.0.1  │             │ alertmanager → Telegram  │
+│  ├─ xray-exporter  127.0.0.1  │             └──────────────────────────┘
+│  └─ pg/redis       127.0.0.1  │
+└───────────────────────────────┘
+```
+
+С каждым сэмплом уезжают лейблы `host` и `role` — по ним собраны дашборды и алерты.
+
+Дашборды: `Fleet Overview` (весь флот по ролям), `Host Detail`, `Panel Services`
+(здоровье бэкендов и контейнеры панели), `Xray Traffic`, `Data Tier`.
 
 ## Безопасность
-Экспортёры наружу не публикуются — только через Caddy на `METRICS_PORT` с TLS + basic auth.
-Дефолтный cert self-signed (Prometheus скрейпит с insecure_skip_verify). Для настоящего LE —
-заменить `tls internal` на домен в `node-agent/Caddyfile`.
-Prometheus (9090) и Alertmanager (9093) слушают только 127.0.0.1 — доступ через SSH-туннель/VPN;
-наружу публикуется только Grafana (3000).
-Blackbox-пробы по умолчанию предпочитают IPv4 (`preferred_ip_protocol: ip4`) — для IPv6-only
-нод нужно скорректировать модуль в `central/blackbox/blackbox.yml`.
+
+- Экспортёры публикуются на `127.0.0.1` — снаружи их нет, даже без firewall.
+- `/push` на central закрыт Bearer-токеном, всё остальное на домене отдаёт Grafana со своей авторизацией.
+- Prometheus, Alertmanager и Grafana портов не публикуют — только Caddy.
+- Токен и пароль Grafana генерируются installer'ом и лежат в `central/.env`.
+
+## Чего этот мониторинг не делает
+
+- **Не проверяет сервис снаружи.** Внешних blackbox-проб нет: недоступность видна косвенно —
+  по пропаже метрик, по `/healthz` и по исчезновению контейнера `panel-caddy`. Протухающий
+  TLS-сертификат не отслеживается вовсе, потому что панель обновляет его сама через ACME.
+- **Не собирает логи.** Только метрики.
+- На data tier ходит с `sslmode=require` вместо `verify-full`: сертификат выписан на
+  `DATA_HOSTNAME`, а экспортёр ходит по внутреннему имени `postgres`. Трафик шифруется,
+  но имя не проверяется — соединение не покидает машину.

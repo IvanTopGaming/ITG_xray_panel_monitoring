@@ -128,11 +128,11 @@ services:
         condition: service_completed_successfully
     command:
       - --config.file=/etc/prometheus/agent.yml
-      - --enable-feature=agent
-      - --storage.agent.path=/agent-data
+      - --agent
+      - --storage.agent.path=/prometheus
     volumes:
       - agent-config:/etc/prometheus:ro
-      - agent-data:/agent-data
+      - agent-data:/prometheus
 
 volumes:
   agent-config:

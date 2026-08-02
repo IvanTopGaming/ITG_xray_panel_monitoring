@@ -532,11 +532,16 @@ cmd_install() {
 
     if [ "$START" -eq 1 ]; then
         rule "Поднимаю"
-        compose up -d 2>&1 | sed 's/^/    /'
-        printf '\n'
-        ok "работает в ${C_BOLD}${COMPOSE_DIR}${C_RESET}"
-        note "  логи:   cd $COMPOSE_DIR && docker compose logs -f"
-        note "  проверка: install.sh doctor --dir $DIR"
+        if compose up -d 2>&1 | sed 's/^/    /'; then
+            printf '\n'
+            ok "работает в ${C_BOLD}${COMPOSE_DIR}${C_RESET}"
+            note "  логи:   cd $COMPOSE_DIR && docker compose logs -f"
+            note "  проверка: install.sh doctor --dir $DIR"
+        else
+            printf '\n'
+            warn "docker compose up не прошёл — конфигурация записана, стек не поднят"
+            note "  подними вручную: cd $COMPOSE_DIR && docker compose up -d"
+        fi
     else
         rule "Записано, но не запущено"
         note "  старт: cd $COMPOSE_DIR && docker compose up -d"
