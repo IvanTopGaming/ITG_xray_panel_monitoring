@@ -73,7 +73,7 @@ bash <(curl -fsSL .../ITG_xray_panel_monitoring/main/install.sh) \
 
 ## Безопасность
 
-- Экспортёры публикуются на `127.0.0.1` — снаружи их нет, даже без firewall.
+- Экспортёры и web-интерфейс самого агента публикуются на `127.0.0.1` — снаружи их нет, даже без firewall.
 - `/push` на central закрыт Bearer-токеном, всё остальное на домене отдаёт Grafana со своей авторизацией.
 - Prometheus, Alertmanager и Grafana портов не публикуют — только Caddy.
 - Токен и пароль Grafana генерируются installer'ом и лежат в `central/.env`.
