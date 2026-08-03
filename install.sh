@@ -421,6 +421,17 @@ detect_panel_network() {
     printf '%s' "$found"
 }
 
+host_name_from_panel() {
+    local penv="$1" role="$2" name=""
+    case "$role" in
+        master|node) name="$(env_get "$penv" PANEL_DOMAIN 2>/dev/null || true)" ;;
+        sub) name="$(env_get "$penv" SUB_DOMAIN 2>/dev/null || true)" ;;
+        bot) name="$(env_get "$penv" BOT_DOMAIN 2>/dev/null || true)" ;;
+    esac
+    [ -n "$name" ] || name="$(hostname -s 2>/dev/null || hostname)"
+    printf '%s' "$name"
+}
+
 detect_xray_logs_volume() {
     local project="$1" found=""
     if has_docker; then
@@ -510,8 +521,7 @@ install_agent() {
     healthz="$(healthz_target_for "$PANEL_ROLE")"
 
     if [ -z "$HOST_NAME" ]; then
-        HOST_NAME="$(env_get "$panel_dir/.env" PANEL_DOMAIN 2>/dev/null || true)"
-        [ -n "$HOST_NAME" ] || HOST_NAME="$(hostname -s 2>/dev/null || hostname)"
+        HOST_NAME="$(host_name_from_panel "$panel_dir/.env" "$PANEL_ROLE")"
     fi
 
     rule "Агент"
