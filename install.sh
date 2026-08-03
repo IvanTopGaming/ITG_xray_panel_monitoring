@@ -118,7 +118,8 @@ usage() {
   commands:
     install            поставить central или агент (по умолчанию)
     doctor             проверить установленное: что запущено, доходит ли до central
-    update             docker compose pull + up -d
+    upgrade            скачать свежие конфиги и дашборды, пересоздать стек
+    update             только образы: docker compose pull + up -d
 
   options:
     --role ROLE        central | agent
@@ -138,7 +139,7 @@ EOF
 
 COMMAND="install"
 case "${1:-}" in
-    install|doctor|update) COMMAND="$1"; shift ;;
+    install|doctor|update|upgrade) COMMAND="$1"; shift ;;
 esac
 
 while [ $# -gt 0 ]; do
@@ -277,19 +278,33 @@ preflight() {
     return 0
 }
 
-fetch_tree() {
-    mkdir -p "$DIR"
-    DIR="$(cd "$DIR" && pwd)"
+fetch_tree_to() {
+    local dest="$1"
+    mkdir -p "$dest"
     if [ -n "$SOURCE" ]; then
         if [ ! -d "$SOURCE/central" ] || [ ! -d "$SOURCE/agent" ]; then
             die "$SOURCE не похож на чекаут мониторинга" "Нужны каталоги central/ и agent/."
         fi
-        tar -C "$SOURCE" -cf - central agent | tar -C "$DIR" -xf -
+        tar -C "$SOURCE" -cf - central agent install.sh README.md DEPLOY.md | tar -C "$dest" -xf -
     else
         curl -fsSL "https://codeload.github.com/$REPO_SLUG/tar.gz/refs/heads/$REF" |
-            tar -xz -C "$DIR" --strip-components=1 ||
+            tar -xz -C "$dest" --strip-components=1 ||
             die "не удалось скачать репозиторий мониторинга" "Пробовал $REPO_SLUG@$REF. Проверь сеть или задай --ref."
     fi
+}
+
+fetch_tree() {
+    mkdir -p "$DIR"
+    DIR="$(cd "$DIR" && pwd)"
+    fetch_tree_to "$DIR"
+}
+
+new_env_keys() {
+    local example="$1" live="$2" key
+    [ -f "$example" ] && [ -f "$live" ] || return 0
+    while IFS= read -r key; do
+        grep -q "^${key}=" "$live" || printf '%s ' "$key"
+    done < <(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$example")
 }
 
 compose() { ( cd "$COMPOSE_DIR" && docker compose "$@" ); }
@@ -610,8 +625,61 @@ cmd_doctor() {
     printf '\n'
 }
 
+cmd_upgrade() {
+    rule "Обновляю файлы"
+    note "  central/ и agent/ заменяются целиком — ручные правки в них будут потеряны."
+    note "  Файлы .env сохраняются."
+    printf '\n'
+
+    spinner_start "читаю $([ -n "$SOURCE" ] && echo "$SOURCE" || echo "$REPO_SLUG@$REF")"
+    fetch_tree_to "$WORK/tree"
+    spinner_stop
+
+    local saved="$WORK/env" part
+    mkdir -p "$saved"
+    for part in central agent; do
+        [ -f "$DIR/$part/.env" ] && cp "$DIR/$part/.env" "$saved/$part.env"
+    done
+
+    rm -rf "$DIR/central" "$DIR/agent"
+    tar -C "$WORK/tree" -cf - central agent | tar -C "$DIR" -xf -
+    for part in central agent; do
+        [ -f "$saved/$part.env" ] && cp "$saved/$part.env" "$DIR/$part/.env"
+    done
+    ok "конфигурация обновлена, .env на месте"
+
+    if [ -f "$WORK/tree/install.sh" ]; then
+        cp "$WORK/tree/install.sh" "$DIR/.install.sh.new"
+        chmod +x "$DIR/.install.sh.new"
+        mv "$DIR/.install.sh.new" "$DIR/install.sh"
+        ok "install.sh обновлён"
+    fi
+
+    local missing
+    missing="$(new_env_keys "$COMPOSE_DIR/.env.example" "$COMPOSE_DIR/.env")"
+    if [ -n "$missing" ]; then
+        warn "в новой версии появились переменные: ${C_BOLD}${missing}${C_RESET}"
+        note "    Допиши их в $COMPOSE_DIR/.env — без них стек может не подняться."
+    fi
+
+    if [ "$START" -eq 0 ]; then
+        rule "Не перезапускаю"
+        note "  примени: cd $COMPOSE_DIR && docker compose up -d --force-recreate"
+        printf '\n'
+        return 0
+    fi
+
+    rule "Перезапускаю"
+    has_docker || die "docker недоступен" "Файлы обновлены; подними стек сам."
+    compose_show pull
+    compose_show up -d --force-recreate --remove-orphans
+    printf '\n'
+    ok "обновлено"
+    printf '\n'
+}
+
 cmd_update() {
-    rule "Обновляю"
+    rule "Обновляю образы"
     has_docker || die "docker недоступен"
     compose_show pull
     compose_show up -d
@@ -626,4 +694,5 @@ case "$COMMAND" in
     install) cmd_install ;;
     doctor) detect_role; cmd_doctor ;;
     update) detect_role; cmd_update ;;
+    upgrade) detect_role; cmd_upgrade ;;
 esac
