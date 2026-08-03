@@ -422,19 +422,28 @@ detect_panel_network() {
 }
 
 data_tier_values() {
-    local penv="$1" pg_user pg_pass pg_db redis_pass
+    local penv="$1" pg_user pg_pass pg_db redis_pass redis_user
     [ -f "$penv" ] || die "нет $penv" "Для роли data нужен .env панели — укажи --panel-dir."
     pg_user="$(env_get "$penv" POSTGRES_USER)"
     pg_pass="$(env_get "$penv" POSTGRES_PASSWORD)"
     pg_db="$(env_get "$penv" POSTGRES_DB)"
-    redis_pass="$(env_get "$penv" REDIS_PANEL_PASSWORD)"
+    redis_user="monitoring"
+    redis_pass="$(env_get "$penv" REDIS_MONITORING_PASSWORD)"
+    if [ -z "$redis_pass" ]; then
+        redis_user="panel"
+        redis_pass="$(env_get "$penv" REDIS_PANEL_PASSWORD)"
+        warn "в .env панели нет REDIS_MONITORING_PASSWORD — беру пароль panel"
+        note "    Этот ACL-юзер не может INFO, поэтому метрик Redis не будет. Обнови панель"
+        note "    и перезапусти на этом хосте redis, затем переустанови агент."
+    fi
     if [ -z "$pg_pass" ] || [ -z "$redis_pass" ]; then
-        die "в $penv нет POSTGRES_PASSWORD/REDIS_PANEL_PASSWORD" "Это точно каталог роли data?"
+        die "в $penv нет POSTGRES_PASSWORD/REDIS_*_PASSWORD" "Это точно каталог роли data?"
     fi
     VALUES[PG_DSN]="postgresql://${pg_user:-panel}:${pg_pass}@postgres:5432/${pg_db:-panel}?sslmode=require"
     VALUES[REDIS_ADDR]="rediss://redis:6379"
+    VALUES[REDIS_USER]="$redis_user"
     VALUES[REDIS_PASSWORD]="$redis_pass"
-    ok "секреты data tier взяты из .env панели"
+    ok "секреты data tier взяты из .env панели ${C_DIM}(redis: $redis_user)${C_RESET}"
 }
 
 install_agent() {
