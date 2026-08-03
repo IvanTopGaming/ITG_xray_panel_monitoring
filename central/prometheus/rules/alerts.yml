@@ -6,7 +6,15 @@ groups:
         labels: { severity: critical }
         annotations:
           summary: "Хост {{ $labels.host }} ({{ $labels.role }}) не шлёт метрики"
-          description: "Данные не приходят > 90 сек. Хост лёг или потерял связь с central."
+          description: "Свежих данных нет > 90 сек: хост лёг, потерял связь с central — либо у него ушли часы, и метрики приходят с меткой времени из прошлого. Второе отличается тем, что рядом горит ClockSkew, а данные при этом идут."
+
+      - alert: ClockSkew
+        expr: abs(time() - node_time_seconds) > 60
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Часы на {{ $labels.host }} разошлись с central"
+          description: "Расхождение {{ printf \"%.0f\" $value }} сек. В push-модели метку времени ставит сам хост, поэтому его метрики уезжают в прошлое (или будущее), графики врут, а HostDown срабатывает на живой машине. Причина обычно одна: не работает синхронизация времени — проверь node_timex_sync_status."
 
       - alert: PanelUnhealthy
         expr: probe_success{job="healthz"} == 0
