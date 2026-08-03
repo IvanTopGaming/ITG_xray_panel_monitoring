@@ -14,7 +14,7 @@ Push-мониторинг всех хостов [ITG Xray Panel](https://github.
 |---|---|
 | все | CPU / RAM / диск / сеть / load, метрики всех контейнеров |
 | `master`, `node`, `sub`, `bot`, `cron` | `/healthz` бэкенда изнутри сети панели |
-| `node` | трафик Xray по inbound и по юзерам (gRPC Stats API) |
+| `node` | трафик Xray по inbound и по юзерам (gRPC Stats API), топ доменов, страны и ASN (access-лог) |
 | `data` | Postgres (коннекты, размер БД) и Redis (память, клиенты, отказы) |
 
 Алерты в Telegram: хост перестал слать метрики, бэкенд нездоров, ядро Xray не отвечает,
