@@ -75,7 +75,7 @@ services:
       - panel-net
 
   xray-exporter:
-    image: ghcr.io/compassvpn/xray-exporter:latest
+    image: ghcr.io/compassvpn/xray-exporter:${XRAY_EXPORTER_TAG:-v0.6.4}
     container_name: mon-xray-exporter
     restart: unless-stopped
     profiles: ["xray"]
