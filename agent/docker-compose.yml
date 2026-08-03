@@ -41,12 +41,12 @@ services:
     command:
       - --path.rootfs=/host
       - --web.listen-address=127.0.0.1:9100
-      - --collector.systemd
       - --collector.processes
     pid: host
     network_mode: host
     volumes:
       - /:/host:ro,rslave
+      - /run/udev:/run/udev:ro
 
   dockerstats:
     image: wywywywy/docker_stats_exporter:${DOCKERSTATS_TAG:-latest}
@@ -130,6 +130,7 @@ services:
       - --config.file=/etc/prometheus/agent.yml
       - --agent
       - --storage.agent.path=/prometheus
+      - --web.listen-address=127.0.0.1:9090
     volumes:
       - agent-config:/etc/prometheus:ro
       - agent-data:/prometheus
