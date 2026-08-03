@@ -83,8 +83,11 @@ services:
       - --xray-endpoint=${XRAY_API_ENDPOINT:-xray:10085}
       - --listen=:9550
       - --user-traffic-metrics
+      - --log-time-window=${XRAY_LOG_WINDOW:-5}
     ports:
       - "127.0.0.1:9550:9550"
+    volumes:
+      - xray-logs:/var/log/xray:ro
     networks:
       - agent-net
       - panel-net
@@ -138,3 +141,6 @@ services:
 volumes:
   agent-config:
   agent-data:
+  xray-logs:
+    external: true
+    name: ${XRAY_LOGS_VOLUME:-xray_logs}

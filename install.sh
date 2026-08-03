@@ -421,6 +421,20 @@ detect_panel_network() {
     printf '%s' "$found"
 }
 
+detect_xray_logs_volume() {
+    local project="$1" found=""
+    if has_docker; then
+        found="$(docker volume ls --format '{{.Name}}' | grep -x "${project}_xray_logs" || true)"
+        [ -z "$found" ] && found="$(docker volume ls --format '{{.Name}}' | grep -E '_xray_logs$' | head -1 || true)"
+    fi
+    if [ -z "$found" ]; then
+        warn "не нашёл том с логами Xray (${project}_xray_logs)" >&2
+        note "    Метрики по доменам и гео не поедут; трафик по inbound и юзерам не зависит от них." >&2
+        found="${project}_xray_logs"
+    fi
+    printf '%s' "$found"
+}
+
 data_tier_values() {
     local penv="$1" pg_user pg_pass pg_db redis_pass redis_user
     [ -f "$penv" ] || die "нет $penv" "Для роли data нужен .env панели — укажи --panel-dir."
@@ -513,6 +527,7 @@ install_agent() {
     VALUES[PANEL_NETWORK]="$network"
     VALUES[HEALTHZ_TARGET]="${healthz:-backend:5000}"
     VALUES[COMPOSE_PROFILES]="$(profiles_for "$PANEL_ROLE")"
+    [ "$PANEL_ROLE" = "node" ] && VALUES[XRAY_LOGS_VOLUME]="$(detect_xray_logs_volume "$project")"
 
     [ "$PANEL_ROLE" = "data" ] && data_tier_values "$panel_dir/.env"
 

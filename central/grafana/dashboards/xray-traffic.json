@@ -1,24 +1,244 @@
 {
   "uid": "xray-traffic",
   "title": "Xray Traffic",
-  "tags": ["itg", "xray"],
+  "tags": [
+    "itg",
+    "xray"
+  ],
   "schemaVersion": 39,
-  "time": { "from": "now-6h", "to": "now" },
-  "templating": { "list": [
-    { "name": "host", "type": "query", "datasource": {"type":"prometheus","uid":"prometheus"},
-      "query": "label_values(up{job=\"xray\"}, host)", "includeAll": true, "multi": true, "current": {} }
-  ]},
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "host",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values(up{job=\"xray\"}, host)",
+        "includeAll": true,
+        "multi": true,
+        "current": {}
+      }
+    ]
+  },
   "panels": [
-    { "id": 1, "type": "timeseries", "title": "Uplink rate (bit/s)", "gridPos": {"h":8,"w":12,"x":0,"y":0},
-      "datasource": {"type":"prometheus","uid":"prometheus"},
-      "fieldConfig": {"defaults": {"unit": "bps"}, "overrides": []},
-      "targets": [{"expr":"sum by (host) (rate(xray_traffic_uplink_bytes_total{dimension=\"inbound\",host=~\"$host\"}[5m]) * 8)","refId":"A","legendFormat":"{{host}}"}] },
-    { "id": 2, "type": "timeseries", "title": "Downlink rate (bit/s)", "gridPos": {"h":8,"w":12,"x":12,"y":0},
-      "datasource": {"type":"prometheus","uid":"prometheus"},
-      "fieldConfig": {"defaults": {"unit": "bps"}, "overrides": []},
-      "targets": [{"expr":"sum by (host) (rate(xray_traffic_downlink_bytes_total{dimension=\"inbound\",host=~\"$host\"}[5m]) * 8)","refId":"A","legendFormat":"{{host}}"}] },
-    { "id": 3, "type": "table", "title": "Top traffic by user", "gridPos": {"h":10,"w":24,"x":0,"y":8},
-      "datasource": {"type":"prometheus","uid":"prometheus"},
-      "targets": [{"expr":"topk(20, sum by (target) (rate(xray_traffic_downlink_bytes_total{dimension=\"user\",host=~\"$host\"}[5m]) * 8))","refId":"A","format":"table","instant":true}] }
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Uplink rate (bit/s)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (host) (rate(xray_traffic_uplink_bytes_total{dimension=\"inbound\",host=~\"$host\"}[5m]) * 8)",
+          "refId": "A",
+          "legendFormat": "{{host}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Downlink rate (bit/s)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (host) (rate(xray_traffic_downlink_bytes_total{dimension=\"inbound\",host=~\"$host\"}[5m]) * 8)",
+          "refId": "A",
+          "legendFormat": "{{host}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Top traffic by user",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "topk(20, sum by (target) (rate(xray_traffic_downlink_bytes_total{dimension=\"user\",host=~\"$host\"}[5m]) * 8))",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Уникальных юзеров (окно 5 мин)",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 18
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(xray_unique_users{host=~\"$host\"})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Соединений (окно 5 мин)",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 18
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(xray_total_connections{host=~\"$host\"})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Топ запрашиваемых доменов",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "topk(25, sum by (target) (xray_requested_domain_ip{host=~\"$host\"}))",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "piechart",
+      "title": "Страны назначения",
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 23
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "topk(12, sum by (country) (xray_countries{host=~\"$host\"}))",
+          "refId": "A",
+          "instant": true,
+          "legendFormat": "{{country}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Топ ASN",
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 23
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "topk(15, sum by (asn, org) (xray_asns{host=~\"$host\"}))",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Запросы по outbound",
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 23
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (outbound) (xray_outbound_requests{host=~\"$host\"})",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    }
   ]
 }
