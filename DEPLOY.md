@@ -76,15 +76,26 @@ bash <(curl -fsSL .../ITG_xray_panel_monitoring/main/install.sh) \
 
 ## 3. Data tier — что происходит с секретами
 
-На роли `data` агент читает `POSTGRES_USER/PASSWORD/DB` и `REDIS_PANEL_PASSWORD` из `.env`
+На роли `data` агент читает `POSTGRES_USER/PASSWORD/DB` и `REDIS_MONITORING_PASSWORD` из `.env`
 панели рядом и собирает из них строки подключения. Ходит он внутрь docker-сети по именам
 `postgres` и `redis`, поэтому проверка имени в сертификате отключена:
 
 - Postgres — `sslmode=require`;
-- Redis — `REDIS_EXPORTER_SKIP_TLS_VERIFICATION=true`, пользователь `panel`.
+- Redis — `REDIS_EXPORTER_SKIP_TLS_VERIFICATION=true`, ACL-юзер `monitoring`.
 
 Сертификат data tier выписан на `DATA_HOSTNAME`, и по внутреннему имени `verify-full` не прошёл
 бы никогда. Соединение при этом шифруется и не покидает машину.
+
+**Redis требует панели свежее той версии, где появился ACL-юзер `monitoring`.** У юзера `panel`
+команда `INFO` запрещена (она входит в `@dangerous`), поэтому экспортёр под ним не собирает
+вообще ничего: `redis_up` остаётся нулём и `RedisDown` врёт на живом Redis. Юзер `monitoring`
+умеет только читать статистику — ни одного ключа и ни одного канала он не видит, что заодно
+убирает с хоста мониторинга самый широкий пароль тира.
+
+Если панель старее, installer это заметит, возьмёт пароль `panel` и предупредит. Чтобы починить:
+обнови панель, перезапусти на data-хосте `redis` (`docker compose -f docker-compose.postgres.yml
+up -d redis` — данных там нет, снапшоты нод восстановятся за 10 секунд), затем на этом же хосте
+`./install.sh upgrade` и переустанови агент, чтобы он подхватил новый пароль.
 
 ---
 

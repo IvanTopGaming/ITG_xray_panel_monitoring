@@ -109,7 +109,7 @@ services:
     profiles: ["data"]
     environment:
       REDIS_ADDR: ${REDIS_ADDR:-}
-      REDIS_USER: panel
+      REDIS_USER: ${REDIS_USER:-monitoring}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       REDIS_EXPORTER_SKIP_TLS_VERIFICATION: "true"
     ports:
